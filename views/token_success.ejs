@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bağlantı Başarılı</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f5f5; color: #1a1a1a; min-height: 100vh;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .card {
+      background: #fff; border: 1px solid #e0e0e0; border-radius: 12px;
+      padding: 40px; max-width: 560px; width: 90%;
+    }
+    .success-icon { font-size: 48px; margin-bottom: 16px; }
+    h1 { font-size: 22px; margin-bottom: 8px; }
+    .subtitle { color: #666; font-size: 14px; margin-bottom: 24px; line-height: 1.5; }
+    .warning {
+      background: #fef3c7; border: 1px solid #f59e0b; border-radius: 8px;
+      padding: 16px; margin-bottom: 20px; font-size: 14px; line-height: 1.6;
+    }
+    .warning strong { color: #92400e; }
+    .token-box {
+      background: #1a1a1a; color: #4ade80; padding: 16px; border-radius: 8px;
+      font-family: 'SF Mono', 'Consolas', monospace; font-size: 13px;
+      word-break: break-all; margin-bottom: 12px; user-select: all;
+      line-height: 1.5;
+    }
+    .copy-btn {
+      display: block; width: 100%; padding: 12px; background: #2563eb;
+      color: #fff; border: none; border-radius: 8px; font-size: 14px;
+      font-weight: 600; cursor: pointer; margin-bottom: 20px;
+    }
+    .copy-btn:hover { background: #1d4ed8; }
+    .steps { font-size: 14px; line-height: 1.8; color: #555; }
+    .steps strong { color: #1a1a1a; }
+    .done-btn {
+      display: block; width: 100%; padding: 14px; background: #16a34a;
+      color: #fff; border: none; border-radius: 8px; font-size: 15px;
+      font-weight: 600; cursor: pointer; margin-top: 20px; text-align: center;
+      text-decoration: none;
+    }
+    .done-btn:hover { background: #15803d; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="success-icon">✅</div>
+    <h1>Shopify Bağlantısı Başarılı!</h1>
+    <p class="subtitle">Token alındı. Şimdi bunu Railway'e kaydetmen lazım ki her deploy'da tekrar bağlanmak zorunda kalma.</p>
+
+    <div class="warning">
+      <strong>⚠️ Bu token'ı bir yere kaydet!</strong> Aşağıdaki kodu kopyala ve Railway Variables'a ekle. Yoksa uygulama her yeniden başladığında tekrar bağlanman gerekir.
+    </div>
+
+    <div class="token-box" id="tokenText"><%= token %></div>
+
+    <button class="copy-btn" onclick="copyToken()">Kopyala</button>
+
+    <div class="steps">
+      <strong>Adımlar:</strong><br>
+      1. Yukarıdaki kodu kopyala<br>
+      2. Railway'e git → surat-kargo servisi → Variables<br>
+      3. <strong>SHOPIFY_ACCESS_TOKEN</strong> adında yeni variable ekle<br>
+      4. Kopyaladığın kodu değer olarak yapıştır<br>
+      5. Deploy et
+    </div>
+
+    <a href="/" class="done-btn">Uygulamaya Git →</a>
+  </div>
+
+  <script>
+    function copyToken() {
+      const text = document.getElementById('tokenText').textContent;
+      navigator.clipboard.writeText(text).then(() => {
+        const btn = document.querySelector('.copy-btn');
+        btn.textContent = '✓ Kopyalandı!';
+        btn.style.background = '#16a34a';
+      });
+    }
+  </script>
+</body>
+</html>

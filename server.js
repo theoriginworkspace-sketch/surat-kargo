@@ -3,7 +3,6 @@ const express = require('express');
 const path = require('path');
 const crypto = require('crypto');
 const cookieParser = require('cookie-parser');
-const fs = require('fs');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -14,48 +13,36 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
 app.use(cookieParser());
 
-// Shopify iframe içinde çalışabilmesi için CSP header
+// Shopify iframe + cookie ayarları
 app.use((req, res, next) => {
   const shop = process.env.SHOPIFY_STORE || 'bestmodeltr.myshopify.com';
-  res.setHeader(
-    'Content-Security-Policy',
+  res.setHeader('Content-Security-Policy',
     `frame-ancestors https://${shop} https://admin.shopify.com`
   );
   next();
 });
 
 // ==========================================
-// TOKEN YÖNETİMİ
-// ==========================================
-const TOKEN_FILE = path.join(__dirname, '.shopify_token');
-
-function getAccessToken() {
-  // Önce environment variable kontrol
-  if (process.env.SHOPIFY_ACCESS_TOKEN && process.env.SHOPIFY_ACCESS_TOKEN !== 'henuz_alinmadi') {
-    return process.env.SHOPIFY_ACCESS_TOKEN;
-  }
-  // Sonra dosyadan oku
-  try {
-    if (fs.existsSync(TOKEN_FILE)) {
-      return fs.readFileSync(TOKEN_FILE, 'utf-8').trim();
-    }
-  } catch (e) {}
-  return null;
-}
-
-function saveAccessToken(token) {
-  fs.writeFileSync(TOKEN_FILE, token, 'utf-8');
-  process.env.SHOPIFY_ACCESS_TOKEN = token;
-}
-
-// ==========================================
-// SHOPIFY OAUTH
+// SABITLER
 // ==========================================
 const SHOPIFY_STORE = process.env.SHOPIFY_STORE || 'bestmodeltr.myshopify.com';
 const SHOPIFY_API_KEY = process.env.SHOPIFY_API_KEY;
 const SHOPIFY_API_SECRET = process.env.SHOPIFY_API_SECRET;
 const SCOPES = 'read_orders,write_fulfillments,read_customers';
+const API_VERSION = '2024-10';
 
+// Token bellekte sakla (Railway restart'a kadar kalır)
+// Kalıcı token için SHOPIFY_ACCESS_TOKEN env var kullanılır
+let memoryToken = null;
+
+function getAccessToken() {
+  if (process.env.SHOPIFY_ACCESS_TOKEN) return process.env.SHOPIFY_ACCESS_TOKEN;
+  return memoryToken;
+}
+
+// ==========================================
+// SHOPIFY OAUTH — iframe dışında çalışır
+// ==========================================
 app.get('/auth', (req, res) => {
   const nonce = crypto.randomBytes(16).toString('hex');
   res.cookie('shopify_nonce', nonce, { httpOnly: true, sameSite: 'lax' });
@@ -71,15 +58,14 @@ app.get('/auth', (req, res) => {
 });
 
 app.get('/auth/callback', async (req, res) => {
-  const { code, state, shop } = req.query;
+  const { code, state } = req.query;
   const nonce = req.cookies.shopify_nonce;
 
   if (!state || state !== nonce) {
-    return res.status(403).send('Güvenlik doğrulaması başarısız');
+    return res.status(403).send('Güvenlik doğrulaması başarısız. Lütfen /auth adresinden tekrar deneyin.');
   }
 
   try {
-    // Access token al
     const tokenResponse = await fetch(`https://${SHOPIFY_STORE}/admin/oauth/access_token`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -93,24 +79,25 @@ app.get('/auth/callback', async (req, res) => {
     const tokenData = await tokenResponse.json();
 
     if (tokenData.access_token) {
-      saveAccessToken(tokenData.access_token);
-      console.log('✅ Shopify access token alındı ve kaydedildi!');
-      res.redirect('/?message=Shopify+bağlantısı+başarılı!&type=success');
+      memoryToken = tokenData.access_token;
+      process.env.SHOPIFY_ACCESS_TOKEN = tokenData.access_token;
+      console.log('✅ Shopify access token alındı!');
+
+      // Token'ı göster ki Railway'e kaydedebilsin
+      return res.render('token_success', { token: tokenData.access_token });
     } else {
       console.error('Token alınamadı:', tokenData);
-      res.redirect('/?message=Token+alınamadı&type=error');
+      return res.redirect('/?message=Token+alınamadı&type=error');
     }
   } catch (error) {
     console.error('OAuth hatası:', error.message);
-    res.redirect('/?message=Bağlantı+hatası&type=error');
+    return res.redirect('/?message=Bağlantı+hatası:+' + encodeURIComponent(error.message) + '&type=error');
   }
 });
 
 // ==========================================
-// SHOPIFY API FONKSİYONLARI
+// SHOPIFY API
 // ==========================================
-const API_VERSION = '2024-10';
-
 async function shopifyFetch(endpoint, options = {}) {
   const token = getAccessToken();
   if (!token) throw new Error('Shopify bağlantısı yapılmamış');
@@ -135,7 +122,7 @@ async function shopifyFetch(endpoint, options = {}) {
 }
 
 // ==========================================
-// SÜRAT KARGO SOAP
+// SÜRAT KARGO
 // ==========================================
 const suratkargo = require('./services/suratkargo');
 
@@ -145,19 +132,18 @@ const suratkargo = require('./services/suratkargo');
 app.get('/', async (req, res) => {
   const token = getAccessToken();
 
-  // Token yoksa kurulum sayfası göster
   if (!token) {
     return res.render('setup', {
       apiKeySet: !!SHOPIFY_API_KEY,
-      suratSet: !!process.env.SURAT_KULLANICI_ADI
+      suratSet: !!process.env.SURAT_KULLANICI_ADI,
+      host: req.get('host')
     });
   }
 
   try {
     const data = await shopifyFetch('/orders.json?status=open&fulfillment_status=unfulfilled&limit=50');
-    const orders = data.orders || [];
     res.render('index', {
-      orders,
+      orders: data.orders || [],
       message: req.query.message || null,
       messageType: req.query.type || 'info'
     });
@@ -180,17 +166,11 @@ app.post('/ship/:orderId', async (req, res) => {
   try {
     const orderData = await shopifyFetch(`/orders/${orderId}.json`);
     const order = orderData.order;
-    if (!order) {
-      return res.json({ success: false, message: 'Sipariş bulunamadı' });
-    }
+    if (!order) return res.json({ success: false, message: 'Sipariş bulunamadı' });
 
-    // Sürat Kargo'ya gönderi oluştur
     const shipResult = await suratkargo.createShipment(order);
-    if (!shipResult.success) {
-      return res.json({ success: false, message: `Sürat Kargo: ${shipResult.message}` });
-    }
+    if (!shipResult.success) return res.json({ success: false, message: `Sürat Kargo: ${shipResult.message}` });
 
-    // Shopify fulfillment oluştur
     const foData = await shopifyFetch(`/orders/${orderId}/fulfillment_orders.json`);
     const openFO = (foData.fulfillment_orders || []).find(fo =>
       fo.status === 'open' || fo.status === 'in_progress'
@@ -218,16 +198,12 @@ app.post('/ship/:orderId', async (req, res) => {
       trackingNumber: shipResult.trackingNumber,
       message: `Kargo oluşturuldu! Takip No: ${shipResult.trackingNumber}`
     });
-
   } catch (error) {
     console.error('Kargo hatası:', error.message);
     return res.json({ success: false, message: error.message });
   }
 });
 
-// ==========================================
-// SUNUCU BAŞLAT
-// ==========================================
 app.listen(PORT, () => {
   console.log(`\n🚀 Sürat Kargo App: http://localhost:${PORT}`);
   console.log(`📦 Mağaza: ${SHOPIFY_STORE}`);

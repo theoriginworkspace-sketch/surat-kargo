@@ -110,7 +110,7 @@
     </div>
 
     <% if (apiKeySet && suratSet) { %>
-      <a href="/auth" class="connect-btn">Shopify'a Bağlan</a>
+      <a href="https://<%= host %>/auth" target="_top" class="connect-btn">Shopify'a Bağlan</a>
     <% } else { %>
       <a class="connect-btn disabled">Önce Railway Variables'ı tamamlayın</a>
     <% } %>
