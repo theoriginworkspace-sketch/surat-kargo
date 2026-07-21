@@ -1,16 +1,19 @@
 /**
- * Sürat Kargo SOAP API — WSDL'siz doğrudan XML ile çalışır
- * Cloudflare engeline takılmaz
+ * Sürat Kargo SOAP API — Doğrudan XML, birden fazla endpoint dener
  */
 
-const ENDPOINT = 'https://webservices.suratkargo.com.tr/services.asmx';
+const ENDPOINTS = [
+  'https://www.suratkargo.com.tr/GonderiWebServiceGercek/service.asmx',
+  'http://www.suratkargo.com.tr/GonderiWebServiceGercek/service.asmx',
+  'https://www.suratkargo.com.tr/GonderiWebServiceGercek/Service.asmx',
+];
 
 function buildSoapXml(username, password, gonderi) {
   return `<?xml version="1.0" encoding="utf-8"?>
-<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-               xmlns:xsd="http://www.w3.org/2001/XMLSchema"
-               xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
-  <soap:Body>
+<soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                 xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+                 xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">
+  <soap12:Body>
     <GonderiyiKargoyaGonder xmlns="http://tempuri.org/">
       <KullaniciAdi>${escapeXml(username)}</KullaniciAdi>
       <Sifre>${escapeXml(password)}</Sifre>
@@ -34,8 +37,8 @@ function buildSoapXml(username, password, gonderi) {
         ${gonderi.KapidanOdemeTahsilatTipi ? `<KapidanOdemeTahsilatTipi>${gonderi.KapidanOdemeTahsilatTipi}</KapidanOdemeTahsilatTipi>` : ''}
       </Gonderi>
     </GonderiyiKargoyaGonder>
-  </soap:Body>
-</soap:Envelope>`;
+  </soap12:Body>
+</soap12:Envelope>`;
 }
 
 function escapeXml(str) {
@@ -51,6 +54,33 @@ function escapeXml(str) {
 function extractResult(xml) {
   const match = xml.match(/<GonderiyiKargoyaGonderResult>([\s\S]*?)<\/GonderiyiKargoyaGonderResult>/);
   return match ? match[1].trim() : null;
+}
+
+async function trySoapRequest(endpoint, soapXml) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
+
+  try {
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      signal: controller.signal,
+      headers: {
+        'Content-Type': 'application/soap+xml; charset=utf-8',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+        'Accept': 'text/xml, application/xml, application/soap+xml',
+        'Accept-Language': 'tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7',
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache',
+      },
+      body: soapXml
+    });
+
+    clearTimeout(timeout);
+    return response;
+  } catch (err) {
+    clearTimeout(timeout);
+    throw err;
+  }
 }
 
 async function createShipment(order) {
@@ -81,7 +111,6 @@ async function createShipment(order) {
       BirimKg: 1,
     };
 
-    // Kapıda ödeme
     if (order.financial_status === 'pending') {
       gonderi.KapidanOdemeTutari = parseFloat(order.total_price) || 0;
       gonderi.KapidanOdemeTahsilatTipi = 1;
@@ -93,59 +122,58 @@ async function createShipment(order) {
       gonderi
     );
 
-    console.log(`📤 Sürat Kargo'ya gönderi: ${gonderi.KisiKurum} - ${gonderi.Il}/${gonderi.Ilce}`);
+    console.log(`📤 Gönderi: ${gonderi.KisiKurum} - ${gonderi.Il}/${gonderi.Ilce}`);
 
-    const response = await fetch(ENDPOINT, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'text/xml; charset=utf-8',
-        'SOAPAction': 'http://tempuri.org/GonderiyiKargoyaGonder',
-        'User-Agent': 'SuratKargoEntegrasyon/1.0',
-      },
-      body: soapXml
-    });
+    // Tüm endpoint'leri dene
+    let lastError = null;
+    for (const endpoint of ENDPOINTS) {
+      try {
+        console.log(`🔗 Deneniyor: ${endpoint}`);
+        const response = await trySoapRequest(endpoint, soapXml);
 
-    if (!response.ok) {
-      const errorBody = await response.text();
-      console.error(`Sürat Kargo HTTP ${response.status}:`, errorBody.substring(0, 500));
-      return {
-        success: false,
-        trackingNumber: null,
-        message: `Sürat Kargo HTTP hatası: ${response.status}`
-      };
+        if (!response.ok) {
+          const body = await response.text();
+          console.error(`❌ ${endpoint} → HTTP ${response.status}`);
+          lastError = `HTTP ${response.status} - ${endpoint}`;
+          continue;
+        }
+
+        const responseXml = await response.text();
+        const result = extractResult(responseXml);
+
+        if (!result) {
+          console.error('Boş yanıt:', responseXml.substring(0, 300));
+          lastError = 'Sürat Kargo boş yanıt döndü';
+          continue;
+        }
+
+        const isError = result.toLowerCase().includes('hata') ||
+                        result.toLowerCase().includes('error') ||
+                        result.toLowerCase().includes('başarısız');
+
+        if (isError) {
+          return { success: false, trackingNumber: null, message: result };
+        }
+
+        console.log(`✅ Takip No: ${result}`);
+        return { success: true, trackingNumber: result.trim(), message: 'Gönderi başarıyla oluşturuldu' };
+
+      } catch (err) {
+        console.error(`❌ ${endpoint} → ${err.message}`);
+        lastError = err.message;
+        continue;
+      }
     }
 
-    const responseXml = await response.text();
-    const result = extractResult(responseXml);
-
-    if (!result) {
-      console.error('Sürat Kargo boş yanıt:', responseXml.substring(0, 500));
-      return { success: false, trackingNumber: null, message: 'Sürat Kargo boş yanıt döndü' };
-    }
-
-    const isError = result.toLowerCase().includes('hata') ||
-                    result.toLowerCase().includes('error') ||
-                    result.toLowerCase().includes('başarısız');
-
-    if (isError) {
-      console.error('Sürat Kargo hata:', result);
-      return { success: false, trackingNumber: null, message: result };
-    }
-
-    console.log(`✅ Takip No: ${result}`);
-    return {
-      success: true,
-      trackingNumber: result.trim(),
-      message: 'Gönderi başarıyla oluşturuldu'
-    };
-
-  } catch (error) {
-    console.error('Sürat Kargo API hatası:', error.message);
     return {
       success: false,
       trackingNumber: null,
-      message: `API bağlantı hatası: ${error.message}`
+      message: `Tüm endpoint'ler başarısız: ${lastError}`
     };
+
+  } catch (error) {
+    console.error('Sürat Kargo genel hata:', error.message);
+    return { success: false, trackingNumber: null, message: `API hatası: ${error.message}` };
   }
 }
 
