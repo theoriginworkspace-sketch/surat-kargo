@@ -3,7 +3,7 @@
  * Cloudflare engeline takılmaz
  */
 
-const ENDPOINT = 'https://www.suratkargo.com.tr/GonderiWebServiceGercek/service.asmx';
+const ENDPOINT = 'https://webservices.suratkargo.com.tr/services.asmx';
 
 function buildSoapXml(username, password, gonderi) {
   return `<?xml version="1.0" encoding="utf-8"?>
