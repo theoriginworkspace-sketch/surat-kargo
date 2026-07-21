@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sürat Kargo — Best Model</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f5f5;
+      color: #1a1a1a;
+      min-height: 100vh;
+    }
+
+    .header {
+      background: #fff;
+      border-bottom: 1px solid #e0e0e0;
+      padding: 16px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .header h1 {
+      font-size: 18px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .header .store-name {
+      font-size: 13px;
+      color: #666;
+      font-weight: 400;
+    }
+
+    .header .refresh-btn {
+      padding: 8px 16px;
+      background: #f5f5f5;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      color: #333;
+    }
+    .header .refresh-btn:hover { background: #eee; }
+
+    .container {
+      max-width: 960px;
+      margin: 24px auto;
+      padding: 0 16px;
+    }
+
+    .alert {
+      padding: 12px 16px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+      font-size: 14px;
+    }
+    .alert-error { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+    .alert-success { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
+    .alert-info { background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; }
+
+    .stats {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    .stat-card {
+      background: #fff;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      padding: 16px 20px;
+      flex: 1;
+    }
+    .stat-card .label { font-size: 12px; color: #888; text-transform: uppercase; letter-spacing: 0.5px; }
+    .stat-card .value { font-size: 28px; font-weight: 700; margin-top: 4px; }
+
+    .orders-table {
+      background: #fff;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .table-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid #e0e0e0;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th {
+      text-align: left;
+      padding: 10px 20px;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #888;
+      border-bottom: 1px solid #f0f0f0;
+      font-weight: 500;
+    }
+
+    td {
+      padding: 14px 20px;
+      font-size: 14px;
+      border-bottom: 1px solid #f5f5f5;
+      vertical-align: middle;
+    }
+
+    tr:last-child td { border-bottom: none; }
+    tr:hover { background: #fafafa; }
+
+    .order-name {
+      font-weight: 600;
+      color: #1a1a1a;
+    }
+
+    .customer-name { color: #555; }
+
+    .address-cell {
+      max-width: 200px;
+      font-size: 13px;
+      color: #666;
+      line-height: 1.4;
+    }
+
+    .price {
+      font-weight: 500;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .ship-btn {
+      padding: 8px 16px;
+      background: #2563eb;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      white-space: nowrap;
+      transition: background 0.15s;
+    }
+    .ship-btn:hover { background: #1d4ed8; }
+    .ship-btn:disabled {
+      background: #94a3b8;
+      cursor: not-allowed;
+    }
+
+    .ship-btn.loading {
+      position: relative;
+      color: transparent;
+    }
+    .ship-btn.loading::after {
+      content: '';
+      position: absolute;
+      width: 16px; height: 16px;
+      top: 50%; left: 50%;
+      margin: -8px 0 0 -8px;
+      border: 2px solid #fff;
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+    }
+
+    .result-cell {
+      font-size: 13px;
+      min-width: 140px;
+    }
+    .tracking-num {
+      font-family: 'SF Mono', 'Consolas', monospace;
+      font-size: 12px;
+      background: #f0fdf4;
+      color: #166534;
+      padding: 4px 8px;
+      border-radius: 4px;
+      display: inline-block;
+    }
+    .error-msg {
+      color: #b91c1c;
+      font-size: 12px;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: #888;
+    }
+    .empty-state .icon { font-size: 48px; margin-bottom: 12px; }
+    .empty-state p { font-size: 15px; }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    @media (max-width: 768px) {
+      .header { padding: 12px 16px; }
+      .stats { flex-direction: column; }
+      th, td { padding: 10px 12px; }
+      .address-cell { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div>
+      <h1>📦 Sürat Kargo</h1>
+      <span class="store-name">bestmodeltr.myshopify.com</span>
+    </div>
+    <button class="refresh-btn" onclick="location.reload()">↻ Yenile</button>
+  </div>
+
+  <div class="container">
+
+    <% if (message) { %>
+      <div class="alert alert-<%= messageType %>"><%= message %></div>
+    <% } %>
+
+    <div class="stats">
+      <div class="stat-card">
+        <div class="label">Bekleyen Sipariş</div>
+        <div class="value"><%= orders.length %></div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Bugün</div>
+        <div class="value"><%= new Date().toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' }) %></div>
+      </div>
+    </div>
+
+    <div class="orders-table">
+      <div class="table-header">Kargolanmamış Siparişler</div>
+
+      <% if (orders.length === 0) { %>
+        <div class="empty-state">
+          <div class="icon">✓</div>
+          <p>Kargolanacak sipariş yok</p>
+        </div>
+      <% } else { %>
+        <table>
+          <thead>
+            <tr>
+              <th>Sipariş</th>
+              <th>Müşteri</th>
+              <th>Adres</th>
+              <th>Tutar</th>
+              <th>İşlem</th>
+              <th>Sonuç</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% orders.forEach(order => { %>
+              <tr id="row-<%= order.id %>">
+                <td class="order-name"><%= order.name %></td>
+                <td class="customer-name">
+                  <%= order.shipping_address ?
+                      (order.shipping_address.first_name + ' ' + order.shipping_address.last_name) :
+                      (order.customer ? order.customer.first_name + ' ' + order.customer.last_name : '-') %>
+                </td>
+                <td class="address-cell">
+                  <% if (order.shipping_address) { %>
+                    <%= order.shipping_address.city %>, <%= order.shipping_address.province || '' %>
+                  <% } else { %>
+                    -
+                  <% } %>
+                </td>
+                <td class="price"><%= parseFloat(order.total_price).toLocaleString('tr-TR', {minimumFractionDigits: 2}) %> ₺</td>
+                <td>
+                  <button class="ship-btn" onclick="shipOrder('<%= order.id %>', this)">
+                    Kargola
+                  </button>
+                </td>
+                <td class="result-cell" id="result-<%= order.id %>"></td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      <% } %>
+    </div>
+  </div>
+
+  <script>
+    async function shipOrder(orderId, btn) {
+      if (!confirm('Bu siparişi kargoya vermek istediğinden emin misin?')) return;
+
+      btn.classList.add('loading');
+      btn.disabled = true;
+      const resultCell = document.getElementById('result-' + orderId);
+      resultCell.innerHTML = '';
+
+      try {
+        const response = await fetch('/ship/' + orderId, { method: 'POST' });
+        const data = await response.json();
+
+        if (data.success) {
+          resultCell.innerHTML = '<span class="tracking-num">' + data.trackingNumber + '</span>';
+          btn.textContent = '✓ Gönderildi';
+          btn.style.background = '#16a34a';
+        } else {
+          resultCell.innerHTML = '<span class="error-msg">' + data.message + '</span>';
+          btn.classList.remove('loading');
+          btn.disabled = false;
+        }
+      } catch (err) {
+        resultCell.innerHTML = '<span class="error-msg">Bağlantı hatası</span>';
+        btn.classList.remove('loading');
+        btn.disabled = false;
+      }
+    }
+  </script>
+
+</body>
+</html>
