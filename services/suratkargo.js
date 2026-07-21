@@ -1,12 +1,9 @@
 /**
- * Sürat Kargo SOAP API — Doğrudan XML, birden fazla endpoint dener
+ * Sürat Kargo SOAP API — Cloudflare Worker proxy üzerinden
  */
 
-const ENDPOINTS = [
-  'https://www.suratkargo.com.tr/GonderiWebServiceGercek/service.asmx',
-  'http://www.suratkargo.com.tr/GonderiWebServiceGercek/service.asmx',
-  'https://www.suratkargo.com.tr/GonderiWebServiceGercek/Service.asmx',
-];
+const PROXY_URL = process.env.SURAT_PROXY_URL || 'https://surat-proxy.cagdashopify.workers.dev';
+const PROXY_KEY = 'surat2026proxy';
 
 function buildSoapXml(username, password, gonderi) {
   return `<?xml version="1.0" encoding="utf-8"?>
@@ -56,33 +53,6 @@ function extractResult(xml) {
   return match ? match[1].trim() : null;
 }
 
-async function trySoapRequest(endpoint, soapXml) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 15000);
-
-  try {
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      signal: controller.signal,
-      headers: {
-        'Content-Type': 'application/soap+xml; charset=utf-8',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
-        'Accept': 'text/xml, application/xml, application/soap+xml',
-        'Accept-Language': 'tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7',
-        'Cache-Control': 'no-cache',
-        'Pragma': 'no-cache',
-      },
-      body: soapXml
-    });
-
-    clearTimeout(timeout);
-    return response;
-  } catch (err) {
-    clearTimeout(timeout);
-    throw err;
-  }
-}
-
 async function createShipment(order) {
   try {
     const shippingAddress = order.shipping_address || order.billing_address;
@@ -123,56 +93,49 @@ async function createShipment(order) {
     );
 
     console.log(`📤 Gönderi: ${gonderi.KisiKurum} - ${gonderi.Il}/${gonderi.Ilce}`);
+    console.log(`🔗 Proxy: ${PROXY_URL}`);
 
-    // Tüm endpoint'leri dene
-    let lastError = null;
-    for (const endpoint of ENDPOINTS) {
-      try {
-        console.log(`🔗 Deneniyor: ${endpoint}`);
-        const response = await trySoapRequest(endpoint, soapXml);
+    const response = await fetch(PROXY_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/soap+xml; charset=utf-8',
+        'X-Proxy-Key': PROXY_KEY,
+      },
+      body: soapXml
+    });
 
-        if (!response.ok) {
-          const body = await response.text();
-          console.error(`❌ ${endpoint} → HTTP ${response.status}`);
-          lastError = `HTTP ${response.status} - ${endpoint}`;
-          continue;
-        }
-
-        const responseXml = await response.text();
-        const result = extractResult(responseXml);
-
-        if (!result) {
-          console.error('Boş yanıt:', responseXml.substring(0, 300));
-          lastError = 'Sürat Kargo boş yanıt döndü';
-          continue;
-        }
-
-        const isError = result.toLowerCase().includes('hata') ||
-                        result.toLowerCase().includes('error') ||
-                        result.toLowerCase().includes('başarısız');
-
-        if (isError) {
-          return { success: false, trackingNumber: null, message: result };
-        }
-
-        console.log(`✅ Takip No: ${result}`);
-        return { success: true, trackingNumber: result.trim(), message: 'Gönderi başarıyla oluşturuldu' };
-
-      } catch (err) {
-        console.error(`❌ ${endpoint} → ${err.message}`);
-        lastError = err.message;
-        continue;
-      }
+    if (!response.ok) {
+      const errorBody = await response.text();
+      console.error(`❌ HTTP ${response.status}:`, errorBody.substring(0, 500));
+      return {
+        success: false,
+        trackingNumber: null,
+        message: `Sürat Kargo HTTP hatası: ${response.status} - ${errorBody.substring(0, 200)}`
+      };
     }
 
-    return {
-      success: false,
-      trackingNumber: null,
-      message: `Tüm endpoint'ler başarısız: ${lastError}`
-    };
+    const responseXml = await response.text();
+    console.log('📩 Yanıt:', responseXml.substring(0, 300));
+    
+    const result = extractResult(responseXml);
+
+    if (!result) {
+      return { success: false, trackingNumber: null, message: 'Sürat Kargo boş yanıt döndü. Yanıt: ' + responseXml.substring(0, 200) };
+    }
+
+    const isError = result.toLowerCase().includes('hata') ||
+                    result.toLowerCase().includes('error') ||
+                    result.toLowerCase().includes('başarısız');
+
+    if (isError) {
+      return { success: false, trackingNumber: null, message: result };
+    }
+
+    console.log(`✅ Takip No: ${result}`);
+    return { success: true, trackingNumber: result.trim(), message: 'Gönderi başarıyla oluşturuldu' };
 
   } catch (error) {
-    console.error('Sürat Kargo genel hata:', error.message);
+    console.error('Sürat Kargo hatası:', error.message);
     return { success: false, trackingNumber: null, message: `API hatası: ${error.message}` };
   }
 }
