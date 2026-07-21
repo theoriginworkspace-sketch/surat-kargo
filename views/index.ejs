@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Sürat Kargo — Best Model</title>
+  <script src="https://cdn.shopify.com/shopifycloud/app-bridge.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -287,6 +288,11 @@
   </div>
 
   <script>
+    // Shopify App Bridge init
+    if (window.shopify) {
+      // App Bridge v4 auto-initializes
+    }
+
     async function shipOrder(orderId, btn) {
       if (!confirm('Bu siparişi kargoya vermek istediğinden emin misin?')) return;
 

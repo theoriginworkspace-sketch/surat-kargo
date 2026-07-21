@@ -14,6 +14,16 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
 app.use(cookieParser());
 
+// Shopify iframe içinde çalışabilmesi için CSP header
+app.use((req, res, next) => {
+  const shop = process.env.SHOPIFY_STORE || 'bestmodeltr.myshopify.com';
+  res.setHeader(
+    'Content-Security-Policy',
+    `frame-ancestors https://${shop} https://admin.shopify.com`
+  );
+  next();
+});
+
 // ==========================================
 // TOKEN YÖNETİMİ
 // ==========================================
