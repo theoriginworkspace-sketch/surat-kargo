@@ -2,7 +2,7 @@
  * Sürat Kargo SOAP API — Cloudflare Worker proxy üzerinden
  */
 
-const PROXY_URL = process.env.SURAT_PROXY_URL || 'https://surat-proxy.cagdashopify.workers.dev';
+const PROXY_URL = process.env.SURAT_PROXY_URL || 'http://70.40.139.184:3001';
 const PROXY_KEY = 'surat2026proxy';
 
 function buildSoapXml(username, password, gonderi) {
