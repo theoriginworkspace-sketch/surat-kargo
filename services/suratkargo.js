@@ -7,10 +7,10 @@ const PROXY_KEY = 'surat2026proxy';
 
 function buildSoapXml(username, password, gonderi) {
   return `<?xml version="1.0" encoding="utf-8"?>
-<soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-                 xmlns:xsd="http://www.w3.org/2001/XMLSchema"
-                 xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">
-  <soap12:Body>
+<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+               xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+               xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Body>
     <GonderiyiKargoyaGonder xmlns="http://tempuri.org/">
       <KullaniciAdi>${escapeXml(username)}</KullaniciAdi>
       <Sifre>${escapeXml(password)}</Sifre>
@@ -34,8 +34,8 @@ function buildSoapXml(username, password, gonderi) {
         ${gonderi.KapidanOdemeTahsilatTipi ? `<KapidanOdemeTahsilatTipi>${gonderi.KapidanOdemeTahsilatTipi}</KapidanOdemeTahsilatTipi>` : ''}
       </Gonderi>
     </GonderiyiKargoyaGonder>
-  </soap12:Body>
-</soap12:Envelope>`;
+  </soap:Body>
+</soap:Envelope>`;
 }
 
 function escapeXml(str) {
@@ -98,7 +98,8 @@ async function createShipment(order) {
     const response = await fetch(PROXY_URL, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/soap+xml; charset=utf-8',
+        'Content-Type': 'text/xml; charset=utf-8',
+        'SOAPAction': 'http://tempuri.org/GonderiyiKargoyaGonder',
         'X-Proxy-Key': PROXY_KEY,
       },
       body: soapXml
