@@ -11,7 +11,7 @@ function buildSoapXml(username, password, gonderi) {
                xmlns:xsd="http://www.w3.org/2001/XMLSchema"
                xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
   <soap:Body>
-    <GonderiyiKargoyaGonder xmlns="http://tempuri.org/">
+    <GonderiyiKargoyaGonderYeni xmlns="http://tempuri.org/">
       <KullaniciAdi>${escapeXml(username)}</KullaniciAdi>
       <Sifre>${escapeXml(password)}</Sifre>
       <Gonderi>
@@ -33,7 +33,7 @@ function buildSoapXml(username, password, gonderi) {
         ${gonderi.KapidanOdemeTutari ? `<KapidanOdemeTutari>${gonderi.KapidanOdemeTutari}</KapidanOdemeTutari>` : ''}
         ${gonderi.KapidanOdemeTahsilatTipi ? `<KapidanOdemeTahsilatTipi>${gonderi.KapidanOdemeTahsilatTipi}</KapidanOdemeTahsilatTipi>` : ''}
       </Gonderi>
-    </GonderiyiKargoyaGonder>
+    </GonderiyiKargoyaGonderYeni>
   </soap:Body>
 </soap:Envelope>`;
 }
@@ -49,7 +49,8 @@ function escapeXml(str) {
 }
 
 function extractResult(xml) {
-  const match = xml.match(/<GonderiyiKargoyaGonderResult>([\s\S]*?)<\/GonderiyiKargoyaGonderResult>/);
+  const match = xml.match(/<GonderiyiKargoyaGonderYeniResult>([\s\S]*?)<\/GonderiyiKargoyaGonderYeniResult>/) ||
+                xml.match(/<GonderiyiKargoyaGonderResult>([\s\S]*?)<\/GonderiyiKargoyaGonderResult>/);
   return match ? match[1].trim() : null;
 }
 
@@ -99,7 +100,7 @@ async function createShipment(order) {
       method: 'POST',
       headers: {
         'Content-Type': 'text/xml; charset=utf-8',
-        'SOAPAction': 'http://tempuri.org/GonderiyiKargoyaGonder',
+        'SOAPAction': 'http://tempuri.org/GonderiyiKargoyaGonderYeni',
         'X-Proxy-Key': PROXY_KEY,
       },
       body: soapXml
